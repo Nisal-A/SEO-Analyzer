@@ -74,35 +74,60 @@ export const resolveAndValidateHost = async (rawHostname, options = {}) => {
     throw new AppError('DNS_FAILED');
   }
 
-  // Reject if ANY resolved address is blocked (prevents multi-A-record bypass).
+  // Reject if ANY resolved address is blocked (prevents multi-A/AAAA-record bypass).
   for (const record of records) {
     if (ipChecker(record.address, hostname)) {
       throw new AppError('BLOCKED_URL');
     }
   }
 
-  const primary = records[0];
+  // Prefer IPv4 ahead of IPv6 so IPv4-only cloud hosts (e.g. Render) do not stall
+  // on blackholed outbound IPv6 sockets when DNS returns AAAA records first.
+  const orderedRecords = [
+    ...records.filter((record) => record.family === 4),
+    ...records.filter((record) => record.family !== 4),
+  ];
+
+  const primary = orderedRecords[0];
 
   return {
     address: primary.address,
     family: primary.family,
-    allAddresses: records,
-    lookup: createPinnedLookup(primary),
+    allAddresses: orderedRecords,
+    lookup: createPinnedLookup(orderedRecords),
   };
 };
 
-const createPinnedLookup = (pinnedRecord) => {
+const createPinnedLookup = (pinnedRecords) => {
+  const normalizedList = Array.isArray(pinnedRecords) ? pinnedRecords : [pinnedRecords];
+
   return (_hostname, lookupOptions, callback) => {
     const cb = typeof lookupOptions === 'function' ? lookupOptions : callback;
     const opts = typeof lookupOptions === 'function' ? {} : (lookupOptions ?? {});
 
-    // Node 22 autoSelectFamily passes { all: true } and expects an array of { address, family }.
-    if (opts.all) {
-      cb(null, [{ address: pinnedRecord.address, family: pinnedRecord.family }]);
+    const matching =
+      opts.family === 4 || opts.family === 6
+        ? normalizedList.filter((record) => record.family === opts.family)
+        : normalizedList;
+
+    if (matching.length === 0) {
+      const err = new Error('No validated address matched the requested IP family');
+      err.code = 'ENOTFOUND';
+      cb(err);
       return;
     }
 
-    cb(null, pinnedRecord.address, pinnedRecord.family);
+    // Node 22 autoSelectFamily passes { all: true } and expects an array of { address, family }.
+    // Return every pre-validated record (ordered IPv4-first) so fallback works without re-querying DNS.
+    if (opts.all) {
+      cb(
+        null,
+        matching.map(({ address, family }) => ({ address, family })),
+      );
+      return;
+    }
+
+    cb(null, matching[0].address, matching[0].family);
   };
 };
 

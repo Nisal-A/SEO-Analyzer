@@ -190,6 +190,58 @@ describe('safeLookup – DNS validation and IP pinning', () => {
 
     assert.equal(lookupCalls, 1, 'Pinned lookup must never trigger another DNS resolution');
   });
+
+  it('orders dual-stack DNS records IPv4-first and preserves all validated addresses for { all: true }', async () => {
+    let lookupCalls = 0;
+    const dualStackResolver = async () => {
+      lookupCalls += 1;
+      return [
+        { address: '2606:2800:220:1:248:1893:25c8:1946', family: 6 },
+        { address: '93.184.216.34', family: 4 },
+        { address: '93.184.216.35', family: 4 },
+      ];
+    };
+
+    const resolved = await resolveAndValidateHost('dualstack.example.com', { dnsResolver: dualStackResolver });
+    assert.equal(lookupCalls, 1);
+    assert.equal(resolved.address, '93.184.216.34');
+    assert.equal(resolved.family, 4);
+
+    resolved.lookup('dualstack.example.com', {}, (err, address, family) => {
+      assert.equal(err, null);
+      assert.equal(address, '93.184.216.34');
+      assert.equal(family, 4);
+    });
+
+    resolved.lookup('dualstack.example.com', { all: true }, (err, addresses) => {
+      assert.equal(err, null);
+      assert.deepEqual(addresses, [
+        { address: '93.184.216.34', family: 4 },
+        { address: '93.184.216.35', family: 4 },
+        { address: '2606:2800:220:1:248:1893:25c8:1946', family: 6 },
+      ]);
+    });
+
+    resolved.lookup('dualstack.example.com', { family: 6 }, (err, address, family) => {
+      assert.equal(err, null);
+      assert.equal(address, '2606:2800:220:1:248:1893:25c8:1946');
+      assert.equal(family, 6);
+    });
+
+    assert.equal(lookupCalls, 1);
+  });
+
+  it('rejects dual-stack DNS responses if the IPv6 record is private/loopback even when IPv4 is public', async () => {
+    const mixedResolver = async () => [
+      { address: '93.184.216.34', family: 4 },
+      { address: '::1', family: 6 },
+    ];
+
+    await assert.rejects(
+      () => resolveAndValidateHost('mixed.example.com', { dnsResolver: mixedResolver }),
+      (err) => err.code === 'BLOCKED_URL' && err.statusCode === 400,
+    );
+  });
 });
 
 describe('safeFetch – SSRF and resource limit test suite', () => {
