@@ -13,7 +13,7 @@ export default function AppLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const getNavLinkClass = ({ isActive }) =>
-    `inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+    `inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
       isActive
         ? 'bg-blue-50 text-blue-700'
         : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
@@ -21,6 +21,12 @@ export default function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-blue-600 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs print:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
           <Link
@@ -80,7 +86,7 @@ export default function AppLayout() {
         ) : null}
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
+      <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
         <Outlet />
       </main>
 

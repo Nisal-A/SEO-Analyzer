@@ -44,9 +44,14 @@ export function useAuditHistory({ initialPage = 1, limit = 10, initialSearch = '
   const removeAudit = useCallback(
     async (id) => {
       await deleteAudit(id);
+      // If deleting the final item on a page > 1, step back cleanly instead of stranding on an empty page.
+      if (audits.length <= 1 && page > 1) {
+        setPage((prev) => Math.max(1, prev - 1));
+        return;
+      }
       await fetchHistory({ targetPage: page, targetSearch: search });
     },
-    [fetchHistory, page, search],
+    [audits.length, fetchHistory, page, search],
   );
 
   return {

@@ -33,3 +33,34 @@
     color: #0f172a;
   }
 }
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  section,
+  article,
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  a {
+    text-decoration: none !important;
+  }
+}

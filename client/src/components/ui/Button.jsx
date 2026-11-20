@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import Spinner from './Spinner.jsx';
 
 const VARIANT_CLASSES = {
@@ -19,22 +20,26 @@ const SIZE_CLASSES = {
   lg: 'px-5 py-2.5 text-base',
 };
 
-export default function Button({
-  type = 'button',
-  variant = 'primary',
-  size = 'md',
-  loading = false,
-  disabled = false,
-  className = '',
-  children,
-  ...rest
-}) {
+const Button = forwardRef(function Button(
+  {
+    type = 'button',
+    variant = 'primary',
+    size = 'md',
+    loading = false,
+    disabled = false,
+    className = '',
+    children,
+    ...rest
+  },
+  ref,
+) {
   const variantClass = VARIANT_CLASSES[variant] ?? VARIANT_CLASSES.primary;
   const sizeClass = SIZE_CLASSES[size] ?? SIZE_CLASSES.md;
   const isDisabled = disabled || loading;
 
   return (
     <button
+      ref={ref}
       type={type}
       disabled={isDisabled}
       className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${variantClass} ${sizeClass} ${className}`}
@@ -44,4 +49,6 @@ export default function Button({
       {children}
     </button>
   );
-}
+});
+
+export default Button;
