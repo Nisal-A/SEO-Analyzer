@@ -18,6 +18,7 @@ export const ERROR_MESSAGES = Object.freeze({
   TOO_MANY_REDIRECTS:
     'The URL redirected more than 5 times. Please submit the final destination URL directly.',
   VALIDATION_ERROR: 'Please check your input and try again.',
+  FORBIDDEN: 'Access to audit history is restricted.',
   NOT_FOUND: 'The requested audit report could not be found.',
   RATE_LIMITED: 'Too many requests. Please wait a few minutes before starting another audit.',
   INTERNAL_ERROR: 'Something went wrong on the server. Please try again shortly.',

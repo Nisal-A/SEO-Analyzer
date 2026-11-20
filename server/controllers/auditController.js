@@ -3,7 +3,17 @@ import {
   listAudits,
   getAuditById,
   deleteAuditById,
+  getGlobalAuditStats,
 } from '../services/auditService.js';
+
+export const getStats = async (req, res) => {
+  const stats = await getGlobalAuditStats();
+
+  res.status(200).json({
+    success: true,
+    data: stats,
+  });
+};
 
 export const analyzeUrl = async (req, res) => {
   const audit = await createAudit({

@@ -34,6 +34,27 @@ const defaultMongooseRepository = {
   async deleteByIdAndOwner({ id, ownerId }) {
     return Audit.findOneAndDelete({ _id: id, ownerId }).lean();
   },
+
+  // Platform-wide aggregate across every owner. Projects only numeric totals/averages.
+  async aggregateGlobalStats() {
+    const [result] = await Audit.aggregate([
+      { $match: { status: 'completed' } },
+      {
+        $group: {
+          _id: null,
+          totalAudits: { $sum: 1 },
+          averageScore: { $avg: '$overallScore' },
+          averageCoverage: { $avg: '$scoreCoverage' },
+          passed: { $sum: { $ifNull: ['$summary.passed', 0] } },
+          warning: { $sum: { $ifNull: ['$summary.warning', 0] } },
+          failed: { $sum: { $ifNull: ['$summary.failed', 0] } },
+          notTested: { $sum: { $ifNull: ['$summary.notTested', 0] } },
+        },
+      },
+      { $project: { _id: 0 } },
+    ]);
+    return result ?? null;
+  },
 };
 
 let activeDependencies = {
@@ -193,11 +214,51 @@ export const deleteAuditById = async ({ id, ownerId }, options = {}) => {
   return deleted;
 };
 
+const toNonNegativeInteger = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : 0;
+};
+
+const toPercentOrNull = (value) => {
+  if (value === null || value === undefined) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.min(100, Math.max(0, Math.round(numeric)));
+};
+
+/**
+ * Anonymized platform-wide metrics across all completed audits (no ownerId filter).
+ * The response is built from an explicit whitelist so no URL, title, id, owner or
+ * timestamp can ever leak, regardless of what the repository returns.
+ *
+ * @param {{ repository?: typeof defaultMongooseRepository }} [options]
+ */
+export const getGlobalAuditStats = async (options = {}) => {
+  const repository = options.repository ?? activeDependencies.repository;
+  const raw = (await repository.aggregateGlobalStats()) ?? {};
+
+  const totalAudits = toNonNegativeInteger(raw.totalAudits);
+  const hasAudits = totalAudits > 0;
+
+  return {
+    totalAudits,
+    averageScore: hasAudits ? toPercentOrNull(raw.averageScore) : null,
+    averageCoverage: hasAudits ? toPercentOrNull(raw.averageCoverage) : null,
+    totals: {
+      passed: hasAudits ? toNonNegativeInteger(raw.passed) : 0,
+      warning: hasAudits ? toNonNegativeInteger(raw.warning) : 0,
+      failed: hasAudits ? toNonNegativeInteger(raw.failed) : 0,
+      notTested: hasAudits ? toNonNegativeInteger(raw.notTested) : 0,
+    },
+  };
+};
+
 export default {
   createAudit,
   listAudits,
   getAuditById,
   deleteAuditById,
+  getGlobalAuditStats,
   escapeRegex,
   setAuditServiceDependencies,
   resetAuditServiceDependencies,

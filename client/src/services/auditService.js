@@ -28,6 +28,12 @@ export const getAuditById = async (id, { signal } = {}) => {
   return response.data.data;
 };
 
+// Anonymized platform-wide aggregates only (no URLs, titles, or ids).
+export const getGlobalStats = async ({ signal } = {}) => {
+  const response = await apiClient.get('/audits/stats', { signal });
+  return response.data.data;
+};
+
 export const deleteAudit = async (id) => {
   await apiClient.delete(`/audits/${encodeURIComponent(id)}`);
   return true;
@@ -38,5 +44,6 @@ export default {
   analyzeUrl,
   getAudits,
   getAuditById,
+  getGlobalStats,
   deleteAudit,
 };

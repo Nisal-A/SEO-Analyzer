@@ -55,7 +55,7 @@ export default function AuditResultPage() {
         <EmptyState
           icon={FileWarning}
           title="Audit Report Not Found"
-          description="This audit report may have been deleted or belongs to a different browser session."
+          description="This audit report may have been removed or was created in a different browser session."
           action={
             <div className="flex flex-wrap items-center justify-center gap-3">
               <Link
@@ -66,10 +66,10 @@ export default function AuditResultPage() {
                 <span>Run New Audit</span>
               </Link>
               <Link
-                to="/history"
+                to="/"
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
               >
-                <span>View History</span>
+                <span>Back to Overview</span>
               </Link>
             </div>
           }

@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { BarChart3, Clock, Info, Menu, Search, ShieldCheck, X } from 'lucide-react';
+import { BarChart3, Info, Menu, Search, ShieldCheck, X } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Overview', icon: BarChart3, end: true },
   { to: '/analyze', label: 'Analyze', icon: Search, end: false },
-  { to: '/history', label: 'History', icon: Clock, end: false },
   { to: '/about', label: 'About', icon: Info, end: false },
 ];
 

@@ -48,5 +48,17 @@ describe('validateEnv', () => {
     const { env } = validateEnv({ MONGODB_URI: VALID_URI, CLIENT_ORIGIN: 'https://seocheck.example.com/' });
     assert.equal(env.CLIENT_ORIGIN, 'https://seocheck.example.com');
   });
+
+  it('treats ADMIN_API_KEY as optional but rejects keys shorter than 16 characters', () => {
+    assert.equal(validateEnv({ MONGODB_URI: VALID_URI }).env.ADMIN_API_KEY, '');
+
+    const shortKey = validateEnv({ MONGODB_URI: VALID_URI, ADMIN_API_KEY: 'short' });
+    assert.equal(shortKey.errors.length, 1);
+    assert.ok(!shortKey.errors[0].includes('short'), 'Errors must never echo the secret value');
+
+    const validKey = validateEnv({ MONGODB_URI: VALID_URI, ADMIN_API_KEY: '  a-long-enough-admin-key  ' });
+    assert.deepEqual(validKey.errors, []);
+    assert.equal(validKey.env.ADMIN_API_KEY, 'a-long-enough-admin-key');
+  });
 });
 

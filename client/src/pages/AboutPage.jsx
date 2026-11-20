@@ -175,16 +175,21 @@ export default function AboutPage() {
         </div>
       </Card>
 
-      <Card title="Audit History Privacy" subtitle="Anonymous per-browser isolation (v1)">
+      <Card title="Audit Privacy" subtitle="No public audit history (v1)">
         <div className="flex items-start gap-3 text-sm leading-relaxed text-slate-700">
           <Lock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden="true" />
-          <p>
-            To keep each visitor&apos;s audit history separated without requiring user accounts,
-            SEOCheck generates a random anonymous ID in your browser&apos;s{' '}
-            <code className="rounded bg-slate-100 px-1 text-xs">localStorage</code> and sends it via
-            the <code className="rounded bg-slate-100 px-1 text-xs">X-Client-Id</code> header. This
-            is a convenience privacy boundary for v1 rather than full account authentication.
-          </p>
+          <div className="space-y-2">
+            <p>
+              Past audits are never listed publicly. After you run an audit, its report opens at a private
+              link scoped to your browser through a random anonymous ID stored in{' '}
+              <code className="rounded bg-slate-100 px-1 text-xs">localStorage</code> and sent via the{' '}
+              <code className="rounded bg-slate-100 px-1 text-xs">X-Client-Id</code> header.
+            </p>
+            <p>
+              The Overview page shows only anonymized aggregate metrics (totals and averages) across all
+              analyzed pages — never individual URLs, page titles, or reports.
+            </p>
+          </div>
         </div>
       </Card>
     </div>

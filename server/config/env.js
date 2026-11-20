@@ -14,6 +14,7 @@ const NUMERIC_VARS = {
 };
 
 const DEFAULT_CLIENT_ORIGIN = 'http://localhost:5173';
+const MIN_ADMIN_API_KEY_LENGTH = 16;
 
 const readString = (source, name) => {
   const value = source[name];
@@ -71,10 +72,17 @@ export const validateEnv = (source) => {
     Object.entries(NUMERIC_VARS).map(([name, rule]) => [name, parseInteger(source, name, rule, errors)]),
   );
 
+  // Optional: when empty, the admin-only history endpoints stay locked for everyone.
+  const adminApiKey = readString(source, 'ADMIN_API_KEY');
+  if (adminApiKey !== '' && adminApiKey.length < MIN_ADMIN_API_KEY_LENGTH) {
+    errors.push(`ADMIN_API_KEY must be at least ${MIN_ADMIN_API_KEY_LENGTH} characters when set`);
+  }
+
   const env = Object.freeze({
     NODE_ENV: nodeEnv,
     MONGODB_URI: mongoUri,
     CLIENT_ORIGIN: clientOrigin,
+    ADMIN_API_KEY: adminApiKey,
     ...numeric,
     isProduction: nodeEnv === 'production',
     isTest: nodeEnv === 'test',

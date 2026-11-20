@@ -42,9 +42,9 @@ A full-stack MERN (MongoDB, Express 5, React + Vite, Node.js 22+) web applicatio
   - Single-source-of-truth weights (`server/services/scoring/scoringConfig.js`).
   - Untestable checks (`not_tested`, such as zero images or unreachable probes) are excluded from both earned and possible points and surfaced via `scoreCoverage` and a dedicated **Could Not Verify** list.
   - Dynamic recommendations interpolate real measured findings (character counts, skipped levels, missing ALT counts) and sort `High -> Medium -> Low`.
-- **Interactive Dashboard, History & Export**
+- **Interactive Dashboard, Privacy & Export**
   - Radial score gauge, status summary cards, responsive Recharts category bar chart, filterable check list, and structured detail panels.
-  - Searchable, paginated audit history with confirmation-protected delete and anonymous per-browser scoping via `X-Client-Id` (`localStorage`).
+  - Every completed audit is stored in MongoDB, but past audits are never listed publicly: the Overview page shows only anonymized platform-wide aggregates (`GET /api/audits/stats`), and history listing/deletion are admin-only via `X-Admin-Key`.
   - Client-side RFC 4180 CSV export with spreadsheet formula-injection neutralization and print-optimized PDF layout (`@media print`).
 
 ---
@@ -98,7 +98,7 @@ SEO-Analyzer/
 │       │   │              # TechnicalReport, RecommendationList
 │       │   └── history/   # SearchBar, HistoryTable, Pagination
 │       ├── services/      # apiClient.js, auditService.js
-│       ├── hooks/         # useAnalyzeAudit.js, useAuditHistory.js, useAuditDetail.js
+│       ├── hooks/         # useAnalyzeAudit.js, useAuditHistory.js, useAuditDetail.js, useGlobalStats.js
 │       └── utils/         # constants.js, formatters.js, csvExport.js
 └── server/
     ├── .env.example
@@ -108,7 +108,7 @@ SEO-Analyzer/
     ├── config/            # env.js, db.js
     ├── routes/            # index.js, healthRoutes.js, auditRoutes.js
     ├── controllers/       # healthController.js, auditController.js
-    ├── middleware/        # rateLimiters.js, clientIdentity.js,
+    ├── middleware/        # rateLimiters.js, clientIdentity.js, requireAdminKey.js,
     │                      # validateAnalyzeRequest.js, validateObjectId.js,
     │                      # notFound.js, errorHandler.js
     ├── models/            # Audit.js
@@ -150,9 +150,12 @@ Base path: `/api`. Import [docs/SEOCheck.postman_collection.json](./docs/SEOChec
 |---|---|---|---|---|
 | `GET` | `/api/health` | API and MongoDB connection status | `200` | — |
 | `POST` | `/api/audits/analyze` | Fetch, analyze, score, and save URL | `201` | `400` (`INVALID_URL`, `BLOCKED_URL`, `VALIDATION_ERROR`), `422` (`NOT_HTML`, `RESPONSE_TOO_LARGE`, `TOO_MANY_REDIRECTS`, `TARGET_HTTP_ERROR`), `429` (`RATE_LIMITED`), `502` (`DNS_FAILED`, `TARGET_UNREACHABLE`), `504` (`TARGET_TIMEOUT`) |
-| `GET` | `/api/audits` | Paginated history (`page`, `limit <= 50`, `search`) | `200` | `400` (`VALIDATION_ERROR`) |
+| `GET` | `/api/audits/stats` | Anonymized platform-wide totals and averages (no URLs, titles, or ids) | `200` | — |
+| `GET` | `/api/audits` | **Admin-only** (`X-Admin-Key`). Paginated history (`page`, `limit <= 50`, `search`) | `200` | `400` (`VALIDATION_ERROR`), `403` (`FORBIDDEN`) |
 | `GET` | `/api/audits/:id` | Retrieve one saved audit report | `200` | `400` (`VALIDATION_ERROR`), `404` (`NOT_FOUND`) |
-| `DELETE` | `/api/audits/:id` | Delete one saved audit report | `204` | `400` (`VALIDATION_ERROR`), `404` (`NOT_FOUND`) |
+| `DELETE` | `/api/audits/:id` | **Admin-only** (`X-Admin-Key`). Delete one saved audit report | `204` | `400` (`VALIDATION_ERROR`), `403` (`FORBIDDEN`), `404` (`NOT_FOUND`) |
+
+Admin-only endpoints require the `X-Admin-Key` header to match the server's `ADMIN_API_KEY` (optional, min. 16 characters). When `ADMIN_API_KEY` is unset they return `403 FORBIDDEN` for everyone.
 
 Standard response envelopes:
 - Success: `{ "success": true, "data": { ... }, "meta"?: { "page", "limit", "total", "totalPages" } }`

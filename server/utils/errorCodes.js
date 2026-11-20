@@ -11,6 +11,7 @@ const ERROR_CODES = Object.freeze({
   RESPONSE_TOO_LARGE: { status: 422, message: 'The page is too large to analyze.' },
   TOO_MANY_REDIRECTS: { status: 422, message: 'The page redirected too many times.' },
   VALIDATION_ERROR: { status: 400, message: 'The request is invalid.' },
+  FORBIDDEN: { status: 403, message: 'Access to audit history is restricted.' },
   NOT_FOUND: { status: 404, message: 'The requested resource was not found.' },
   RATE_LIMITED: { status: 429, message: 'Too many requests. Please try again later.' },
   INTERNAL_ERROR: { status: 500, message: 'Something went wrong. Please try again later.' },

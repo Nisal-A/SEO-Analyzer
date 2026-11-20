@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a7f2b4c8-91d3-4e8a-b2c1-5e6d7f8a9b0c",
     "name": "SEOCheck API",
-    "description": "Complete REST API collection for SEOCheck (health check, SSRF-protected SEO analysis, pagination/search history, detail retrieval, and deletion).",
+    "description": "Complete REST API collection for SEOCheck (health check, SSRF-protected SEO analysis, anonymized global stats, detail retrieval, and admin-only history listing/deletion via X-Admin-Key).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -20,6 +20,12 @@
       "key": "auditId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "adminKey",
+      "value": "",
+      "type": "string",
+      "description": "Must match the server ADMIN_API_KEY to use admin-only history endpoints."
     }
   ],
   "item": [
@@ -273,7 +279,97 @@
       }
     },
     {
-      "name": "6. List Audits (Pagination & Search)",
+      "name": "6. Global Audit Stats (200)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Returns anonymized aggregate metrics only', function () {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.eql(true);",
+              "  pm.expect(body.data).to.have.keys(['totalAudits', 'averageScore', 'averageCoverage', 'totals']);",
+              "  pm.expect(body.data.totals).to.have.keys(['passed', 'warning', 'failed', 'notTested']);",
+              "  pm.expect(pm.response.text()).to.not.include('\"url\"');",
+              "  pm.expect(pm.response.text()).to.not.include('\"_id\"');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/audits/stats",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "audits",
+            "stats"
+          ]
+        },
+        "description": "Public, anonymized platform-wide totals and averages across all completed audits. Never returns URLs, titles, ids, owners, or timestamps. averageScore/averageCoverage are null when totalAudits is 0."
+      }
+    },
+    {
+      "name": "7. List Audits without Admin Key (403 FORBIDDEN)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 403', function () {",
+              "  pm.response.to.have.status(403);",
+              "});",
+              "pm.test('Returns FORBIDDEN error envelope', function () {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.eql(false);",
+              "  pm.expect(body.error.code).to.eql('FORBIDDEN');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Client-Id",
+            "value": "{{clientId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/audits",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "audits"
+          ]
+        },
+        "description": "Audit history listing is admin-only. Requests without a valid X-Admin-Key are rejected with 403 FORBIDDEN."
+      }
+    },
+    {
+      "name": "8. List Audits – Admin (Pagination & Search)",
       "event": [
         {
           "listen": "test",
@@ -303,6 +399,10 @@
           {
             "key": "X-Client-Id",
             "value": "{{clientId}}"
+          },
+          {
+            "key": "X-Admin-Key",
+            "value": "{{adminKey}}"
           }
         ],
         "url": {
@@ -329,11 +429,11 @@
             }
           ]
         },
-        "description": "Fetches paginated audit history scoped to {{clientId}} with regex-safe search filtering."
+        "description": "Admin-only: requires X-Admin-Key = {{adminKey}} (server ADMIN_API_KEY). Fetches paginated audit history scoped to {{clientId}} with regex-safe search filtering."
       }
     },
     {
-      "name": "7. Get Audit by ID (200)",
+      "name": "9. Get Audit by ID (200)",
       "event": [
         {
           "listen": "test",
@@ -379,7 +479,7 @@
       }
     },
     {
-      "name": "8. Delete Audit by ID (204)",
+      "name": "10. Delete Audit by ID – Admin (204)",
       "event": [
         {
           "listen": "test",
@@ -399,6 +499,10 @@
           {
             "key": "X-Client-Id",
             "value": "{{clientId}}"
+          },
+          {
+            "key": "X-Admin-Key",
+            "value": "{{adminKey}}"
           }
         ],
         "url": {
@@ -412,7 +516,7 @@
             "{{auditId}}"
           ]
         },
-        "description": "Deletes the saved audit report created in Request #2."
+        "description": "Admin-only: requires X-Admin-Key = {{adminKey}}. Deletes the saved audit report created in Request #2. Returns 403 FORBIDDEN without a valid key."
       }
     }
   ]

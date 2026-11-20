@@ -9,6 +9,23 @@ import request from 'supertest';
 process.env.NODE_ENV = 'test';
 process.env.MONGODB_URI ??= 'mongodb://127.0.0.1:27017/seocheck_test';
 process.env.CLIENT_ORIGIN ??= 'http://localhost:5173';
+process.env.ADMIN_API_KEY = 'test-admin-key-0123456789abcdef';
+
+const ADMIN_KEY = process.env.ADMIN_API_KEY;
+const FORBIDDEN_FIELDS = ['_id', 'url', 'finalUrl', 'pageTitle', 'ownerId', 'analyzedAt'];
+
+// Recursively collects every object key so tests can prove no per-audit field leaks.
+const collectKeys = (value, keys = new Set()) => {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectKeys(item, keys));
+  } else if (value && typeof value === 'object') {
+    for (const [key, nested] of Object.entries(value)) {
+      keys.add(key);
+      collectKeys(nested, keys);
+    }
+  }
+  return keys;
+};
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VALID_FIXTURE_PATH = path.join(__dirname, '..', 'fixtures', 'valid-page.html');
@@ -74,6 +91,21 @@ const createInMemoryRepository = () => {
       if (!doc || doc.ownerId !== ownerId) return null;
       store.delete(String(id));
       return doc;
+    },
+    async aggregateGlobalStats() {
+      const completed = [...store.values()].filter((doc) => doc.status === 'completed');
+      if (completed.length === 0) return null;
+
+      const sum = (pick) => completed.reduce((total, doc) => total + (pick(doc) ?? 0), 0);
+      return {
+        totalAudits: completed.length,
+        averageScore: sum((doc) => doc.overallScore) / completed.length,
+        averageCoverage: sum((doc) => doc.scoreCoverage) / completed.length,
+        passed: sum((doc) => doc.summary?.passed),
+        warning: sum((doc) => doc.summary?.warning),
+        failed: sum((doc) => doc.summary?.failed),
+        notTested: sum((doc) => doc.summary?.notTested),
+      };
     },
   };
 };
@@ -167,15 +199,15 @@ describe('Audit REST API (/api/audits)', () => {
     const getRes = await request(app).get('/api/audits/not-a-valid-objectid').expect(400);
     assert.equal(getRes.body.error.code, 'VALIDATION_ERROR');
 
-    const delRes = await request(app).delete('/api/audits/123').expect(400);
+    const delRes = await request(app).delete('/api/audits/123').set('X-Admin-Key', ADMIN_KEY).expect(400);
     assert.equal(delRes.body.error.code, 'VALIDATION_ERROR');
   });
 
   it('rejects invalid pagination query params on GET /api/audits with 400 VALIDATION_ERROR', async () => {
-    const badPage = await request(app).get('/api/audits?page=0').expect(400);
+    const badPage = await request(app).get('/api/audits?page=0').set('X-Admin-Key', ADMIN_KEY).expect(400);
     assert.equal(badPage.body.error.code, 'VALIDATION_ERROR');
 
-    const badLimit = await request(app).get('/api/audits?limit=-5').expect(400);
+    const badLimit = await request(app).get('/api/audits?limit=-5').set('X-Admin-Key', ADMIN_KEY).expect(400);
     assert.equal(badLimit.body.error.code, 'VALIDATION_ERROR');
   });
 
@@ -207,12 +239,14 @@ describe('Audit REST API (/api/audits)', () => {
     const listResA = await request(app)
       .get(`/api/audits?page=1&limit=10&search=${encodeURIComponent('example.com (unmatched)[test]')}`)
       .set('X-Client-Id', clientA)
+      .set('X-Admin-Key', ADMIN_KEY)
       .expect(200);
     assert.equal(listResA.body.data.length, 0);
 
     const matchingListRes = await request(app)
       .get(`/api/audits?page=1&limit=100&search=${encodeURIComponent(specialSearch)}`)
       .set('X-Client-Id', clientA)
+      .set('X-Admin-Key', ADMIN_KEY)
       .expect(200);
 
     assert.equal(matchingListRes.body.success, true);
@@ -225,7 +259,11 @@ describe('Audit REST API (/api/audits)', () => {
     });
 
     // 3. Client B cannot see or fetch Client A's audit (ADR-015 Option B isolation)
-    const listResB = await request(app).get('/api/audits').set('X-Client-Id', clientB).expect(200);
+    const listResB = await request(app)
+      .get('/api/audits')
+      .set('X-Client-Id', clientB)
+      .set('X-Admin-Key', ADMIN_KEY)
+      .expect(200);
     assert.equal(listResB.body.data.length, 0);
 
     await request(app)
@@ -247,6 +285,7 @@ describe('Audit REST API (/api/audits)', () => {
     const deleteRes = await request(app)
       .delete(`/api/audits/${createdAudit._id}`)
       .set('X-Client-Id', clientA)
+      .set('X-Admin-Key', ADMIN_KEY)
       .expect(204);
     assert.equal(deleteRes.text, '');
 
@@ -256,5 +295,128 @@ describe('Audit REST API (/api/audits)', () => {
       .set('X-Client-Id', clientA)
       .expect(404);
     assert.equal(notFoundRes.body.error.code, 'NOT_FOUND');
+  });
+});
+
+describe('Global audit stats (GET /api/audits/stats)', () => {
+  it('returns 200 with zero-safe defaults when no audits exist', async () => {
+    const res = await request(app).get('/api/audits/stats').expect(200);
+
+    assert.deepEqual(res.body, {
+      success: true,
+      data: {
+        totalAudits: 0,
+        averageScore: null,
+        averageCoverage: null,
+        totals: { passed: 0, warning: 0, failed: 0, notTested: 0 },
+      },
+    });
+  });
+
+  it('aggregates across ALL owners and never exposes URLs, titles, ids, owners, or timestamps', async () => {
+    await request(app)
+      .post('/api/audits/analyze')
+      .set('X-Client-Id', 'stats-client-one')
+      .send({ url: 'https://example.com/private-page-one' })
+      .expect(201);
+    await request(app)
+      .post('/api/audits/analyze')
+      .set('X-Client-Id', 'stats-client-two')
+      .send({ url: 'https://example.com/private-page-two' })
+      .expect(201);
+
+    // Seed a lower-scoring audit directly so averages are meaningfully computed.
+    await inMemoryRepo.create({
+      ownerId: 'stats-client-three',
+      url: 'https://secret.example.org/',
+      finalUrl: 'https://secret.example.org/',
+      pageTitle: 'Secret Page Title',
+      status: 'completed',
+      overallScore: 49,
+      scoreCoverage: 89,
+      summary: { passed: 6, warning: 4, failed: 6, notTested: 2 },
+    });
+
+    const res = await request(app).get('/api/audits/stats').set('X-Client-Id', 'unrelated-visitor').expect(200);
+
+    assert.equal(res.body.success, true);
+    assert.deepEqual(res.body.data, {
+      totalAudits: 3,
+      averageScore: 83, // (100 + 100 + 49) / 3 = 83
+      averageCoverage: 96, // (100 + 100 + 89) / 3 = 96.33
+      totals: { passed: 42, warning: 4, failed: 6, notTested: 2 },
+    });
+
+    const keys = collectKeys(res.body);
+    for (const field of FORBIDDEN_FIELDS) {
+      assert.ok(!keys.has(field), `Stats response must not include "${field}"`);
+    }
+    assert.doesNotMatch(res.text, /example\.(com|org)|Secret Page Title|stats-client/);
+  });
+});
+
+describe('Admin-only history endpoints (X-Admin-Key)', () => {
+  const assertForbidden = (res) => {
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.error.code, 'FORBIDDEN');
+    assert.equal(res.body.error.message, 'Access to audit history is restricted.');
+    assert.doesNotMatch(res.text, new RegExp(ADMIN_KEY));
+  };
+
+  it('returns 403 FORBIDDEN on GET /api/audits when X-Admin-Key is missing, empty, or wrong, and 200 when valid', async () => {
+    assertForbidden(await request(app).get('/api/audits').expect(403));
+    assertForbidden(await request(app).get('/api/audits').set('X-Admin-Key', '').expect(403));
+    assertForbidden(await request(app).get('/api/audits').set('X-Admin-Key', 'wrong-key').expect(403));
+    assertForbidden(
+      await request(app).get('/api/audits').set('X-Admin-Key', `${ADMIN_KEY}x`).expect(403),
+    );
+
+    const ok = await request(app).get('/api/audits').set('X-Admin-Key', ADMIN_KEY).expect(200);
+    assert.equal(ok.body.success, true);
+    assert.ok(Array.isArray(ok.body.data));
+  });
+
+  it('returns 403 FORBIDDEN on DELETE /api/audits/:id without a valid key, keeps the audit, and deletes with a valid key', async () => {
+    const clientId = 'delete-guard-client';
+    const createRes = await request(app)
+      .post('/api/audits/analyze')
+      .set('X-Client-Id', clientId)
+      .send({ url: 'https://example.com/delete-guard' })
+      .expect(201);
+    const auditId = createRes.body.data._id;
+
+    assertForbidden(
+      await request(app).delete(`/api/audits/${auditId}`).set('X-Client-Id', clientId).expect(403),
+    );
+    assertForbidden(
+      await request(app)
+        .delete(`/api/audits/${auditId}`)
+        .set('X-Client-Id', clientId)
+        .set('X-Admin-Key', 'wrong-key')
+        .expect(403),
+    );
+    assert.ok(inMemoryRepo.store.has(auditId), 'Forbidden deletes must not remove the audit');
+
+    // The owner can still open their own report immediately after analysis.
+    await request(app).get(`/api/audits/${auditId}`).set('X-Client-Id', clientId).expect(200);
+
+    await request(app)
+      .delete(`/api/audits/${auditId}`)
+      .set('X-Client-Id', clientId)
+      .set('X-Admin-Key', ADMIN_KEY)
+      .expect(204);
+    assert.ok(!inMemoryRepo.store.has(auditId));
+  });
+
+  it('locks the endpoints for everyone when no ADMIN_API_KEY is configured', async () => {
+    const { createRequireAdminKey } = await import('../../middleware/requireAdminKey.js');
+    const locked = createRequireAdminKey('');
+
+    for (const headerValue of [undefined, '', 'anything']) {
+      const req = { get: () => headerValue };
+      const err = await new Promise((resolve) => locked(req, {}, resolve));
+      assert.equal(err?.code, 'FORBIDDEN');
+      assert.equal(err?.statusCode, 403);
+    }
   });
 });
