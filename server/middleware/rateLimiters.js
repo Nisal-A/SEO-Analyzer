@@ -4,7 +4,6 @@ import AppError from '../utils/AppError.js';
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
-// Shared factory so the strict analyze limiter (P5-T3) reuses the same behaviour.
 const createLimiter = (limit) =>
   rateLimit({
     windowMs: FIFTEEN_MINUTES_MS,
@@ -16,4 +15,5 @@ const createLimiter = (limit) =>
   });
 
 export const globalLimiter = createLimiter(env.RATE_LIMIT_GLOBAL_PER_15MIN);
-
+export const analyzeRateLimiter = createLimiter(env.RATE_LIMIT_ANALYZE_PER_15MIN);
+export const analyzeLimiter = analyzeRateLimiter;
