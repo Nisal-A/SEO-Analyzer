@@ -3,7 +3,7 @@
 const ERROR_CODES = Object.freeze({
   INVALID_URL: { status: 400, message: 'Please enter a valid http or https URL.' },
   BLOCKED_URL: { status: 400, message: 'This address cannot be analyzed.' },
-  DNS_FAILED: { status: 422, message: 'The website address could not be resolved.' },
+  DNS_FAILED: { status: 502, message: 'The website address could not be resolved.' },
   TARGET_UNREACHABLE: { status: 502, message: 'The website could not be reached.' },
   TARGET_TIMEOUT: { status: 504, message: 'The website took too long to respond.' },
   TARGET_HTTP_ERROR: { status: 422, message: 'The website responded with an error status.' },
