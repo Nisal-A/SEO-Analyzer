@@ -21,6 +21,7 @@ app.use(
   cors({
     origin: env.CLIENT_ORIGIN,
     methods: ['GET', 'POST', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Accept', 'X-Client-Id'],
   }),
 );
 app.use(express.json({ limit: JSON_BODY_LIMIT }));

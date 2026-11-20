@@ -1,0 +1,419 @@
+{
+  "info": {
+    "_postman_id": "a7f2b4c8-91d3-4e8a-b2c1-5e6d7f8a9b0c",
+    "name": "SEOCheck API",
+    "description": "Complete REST API collection for SEOCheck (health check, SSRF-protected SEO analysis, pagination/search history, detail retrieval, and deletion).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "clientId",
+      "value": "postman-qa-client",
+      "type": "string"
+    },
+    {
+      "key": "auditId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Envelope reports ok status', function () {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.eql(true);",
+              "  pm.expect(body.data.status).to.eql('ok');",
+              "  pm.expect(['connected', 'disconnected']).to.include(body.data.db);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        },
+        "description": "Verifies Express API health and MongoDB connection state."
+      }
+    },
+    {
+      "name": "2. Analyze Valid URL (201)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 201', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "pm.test('Audit report returned and auditId saved', function () {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.eql(true);",
+              "  pm.expect(body.data._id).to.be.a('string');",
+              "  pm.expect(body.data.seoChecks.length).to.eql(18);",
+              "  pm.collectionVariables.set('auditId', body.data._id);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Client-Id",
+            "value": "{{clientId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/audits/analyze",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "audits",
+            "analyze"
+          ]
+        },
+        "description": "Runs a full single-page SEO audit on https://example.com, persists the report in MongoDB, and stores the created _id in {{auditId}}."
+      }
+    },
+    {
+      "name": "3. Analyze Invalid URL (400 INVALID_URL)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 400', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "pm.test('Returns INVALID_URL error code', function () {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.eql(false);",
+              "  pm.expect(body.error.code).to.eql('INVALID_URL');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Client-Id",
+            "value": "{{clientId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"ftp://example.com/resource\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/audits/analyze",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "audits",
+            "analyze"
+          ]
+        },
+        "description": "Verifies non-http/https schemes are rejected with 400 INVALID_URL."
+      }
+    },
+    {
+      "name": "4. Analyze Blocked SSRF URL (400 BLOCKED_URL)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 400', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "pm.test('Returns BLOCKED_URL without leaking IP internals', function () {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.eql(false);",
+              "  pm.expect(body.error.code).to.eql('BLOCKED_URL');",
+              "  pm.expect(body.error.message).to.not.include('127.0.0.1');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Client-Id",
+            "value": "{{clientId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"http://127.0.0.1/admin\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/audits/analyze",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "audits",
+            "analyze"
+          ]
+        },
+        "description": "Verifies loopback/internal addresses are blocked by SSRF protections with 400 BLOCKED_URL."
+      }
+    },
+    {
+      "name": "5. Analyze Non-HTML URL (422 NOT_HTML)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 422', function () {",
+              "  pm.response.to.have.status(422);",
+              "});",
+              "pm.test('Returns NOT_HTML error code', function () {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.eql(false);",
+              "  pm.expect(body.error.code).to.eql('NOT_HTML');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Client-Id",
+            "value": "{{clientId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://jsonplaceholder.typicode.com/todos/1\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/audits/analyze",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "audits",
+            "analyze"
+          ]
+        },
+        "description": "Verifies JSON or binary endpoints are rejected with 422 NOT_HTML."
+      }
+    },
+    {
+      "name": "6. List Audits (Pagination & Search)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Returns paginated list and meta', function () {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.eql(true);",
+              "  pm.expect(body.data).to.be.an('array');",
+              "  pm.expect(body.meta).to.have.keys(['page', 'limit', 'total', 'totalPages']);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Client-Id",
+            "value": "{{clientId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/audits?page=1&limit=10&search=example.com",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "audits"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "search",
+              "value": "example.com"
+            }
+          ]
+        },
+        "description": "Fetches paginated audit history scoped to {{clientId}} with regex-safe search filtering."
+      }
+    },
+    {
+      "name": "7. Get Audit by ID (200)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Returns matching audit report', function () {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.eql(true);",
+              "  pm.expect(body.data._id).to.eql(pm.collectionVariables.get('auditId'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Client-Id",
+            "value": "{{clientId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/audits/{{auditId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "audits",
+            "{{auditId}}"
+          ]
+        },
+        "description": "Retrieves a single saved audit report by ObjectId."
+      }
+    },
+    {
+      "name": "8. Delete Audit by ID (204)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 204', function () {",
+              "  pm.response.to.have.status(204);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "X-Client-Id",
+            "value": "{{clientId}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/audits/{{auditId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "audits",
+            "{{auditId}}"
+          ]
+        },
+        "description": "Deletes the saved audit report created in Request #2."
+      }
+    }
+  ]
+}
